@@ -22,24 +22,24 @@ const getAllUsers = asyncHandler(async (req, res) => {
 // @route POST /users
 // @access Private
 const createNewUser = asyncHandler(async (req, res) => {
-    const { username, password, roles } = req.body
+    const { username, email, password, roles } = req.body
 
     // Confirm data
-    if (!username || !password || !Array.isArray(roles) || !roles.length) {
+    if (!username || !email || !password || !Array.isArray(roles) || !roles.length) {
         return res.status(400).json({ message: 'All fields are required' })
     }
 
     // Check for duplicate username
-    const duplicate = await User.findOne({ username }).lean().exec()
+    const duplicate = await User.findOne({ email }).lean().exec()
 
     if (duplicate) {
-        return res.status(409).json({ message: 'Duplicate username' })
+        return res.status(409).json({ message: 'Duplicate email' })
     }
 
     // Hash password 
     const hashedPwd = await bcrypt.hash(password, 10) // salt rounds
 
-    const userObject = { username, "password": hashedPwd, roles }
+    const userObject = { username, email, "password": hashedPwd, roles }
 
     // Create and store new user 
     const user = await User.create(userObject)
@@ -55,11 +55,11 @@ const createNewUser = asyncHandler(async (req, res) => {
 // @route PATCH /users
 // @access Private
 const updateUser = asyncHandler(async (req, res) => {
-    const { id, username, roles, active, password } = req.body
+    const { id, username, email, roles, active, password } = req.body
 
     // Confirm data 
     if (!id || !username || !Array.isArray(roles) || !roles.length || typeof active !== 'boolean') {
-        return res.status(400).json({ message: 'All fields except password are required' })
+        return res.status(400).json({ message: 'All fields except password and email are required' })
     }
 
     // Does the user exist to update?
@@ -70,11 +70,11 @@ const updateUser = asyncHandler(async (req, res) => {
     }
 
     // Check for duplicate 
-    const duplicate = await User.findOne({ username }).lean().exec()
+    const duplicate = await User.findOne({ email }).lean().exec()
 
     // Allow updates to the original user 
     if (duplicate && duplicate?._id.toString() !== id) {
-        return res.status(409).json({ message: 'Duplicate username' })
+        return res.status(409).json({ message: 'Duplicate email' })
     }
 
     user.username = username
@@ -84,6 +84,11 @@ const updateUser = asyncHandler(async (req, res) => {
     if (password) {
         // Hash password 
         user.password = await bcrypt.hash(password, 10) // salt rounds 
+    }
+
+    if (email) {
+        // New email
+        user.email = email
     }
 
     const updatedUser = await user.save()

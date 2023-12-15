@@ -16,7 +16,7 @@ const userSchema = new Schema(
       type: String,  
       required:true
     },
-    notes: [{
+    roles: [{
       type: String,
       default: "developer"
     }],
