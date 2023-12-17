@@ -1,4 +1,4 @@
-const User = require('../models/userController')
+const User = require('../models/userModel')
 const bcrypt = require('bcrypt')
 const jwt = require('jsonwebtoken')
 const asyncHandler = require('express-async-handler')
@@ -6,7 +6,7 @@ const asyncHandler = require('express-async-handler')
 // @desc Login
 // @route POST /auth
 // @access Public
-const login = asyncHandler(async (req, res) => {
+const signin = asyncHandler(async (req, res) => {
     const { email, password } = req.body
 
     if (!email || !password) {
@@ -25,19 +25,20 @@ const login = asyncHandler(async (req, res) => {
 
     const accessToken = jwt.sign(
         {
-            "UserInfo": {
+            "userInfo": {
                 "username": foundUser.username,
+                "id": foundUser._id,
                 "roles": foundUser.roles
             }
         },
         process.env.ACCESS_TOKEN_SECRET_KEY,
-        { expiresIn: '15m' }
+        { expiresIn: '1min' }
     )
 
     const refreshToken = jwt.sign(
         { "email": foundUser.email },
         process.env.REFRESH_TOKEN_SECRET_KEY,
-        { expiresIn: '7d' }
+        { expiresIn: '2min' }
     )
 
     // Create secure cookie with refresh token 
@@ -57,7 +58,6 @@ const login = asyncHandler(async (req, res) => {
 // @access Public - because access token has expired
 const refresh = (req, res) => {
     const cookies = req.cookies
-
     if (!cookies?.jwt) return res.status(401).json({ message: 'Unauthorized' })
 
     const refreshToken = cookies.jwt
@@ -74,13 +74,14 @@ const refresh = (req, res) => {
 
             const accessToken = jwt.sign(
                 {
-                    "UserInfo": {
+                    "userInfo": {
                         "username": foundUser.username,
+                        "id": foundUser._id,
                         "roles": foundUser.roles
                     }
                 },
                 process.env.ACCESS_TOKEN_SECRET_KEY,
-                { expiresIn: '15m' }
+                { expiresIn: '1min' }
             )
 
             res.json({ accessToken })
@@ -99,7 +100,7 @@ const logout = (req, res) => {
 }
 
 module.exports = {
-    login,
+    signin,
     refresh,
     logout
 }

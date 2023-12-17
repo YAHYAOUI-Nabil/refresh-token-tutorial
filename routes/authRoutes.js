@@ -6,14 +6,13 @@ const limiter = require('../middlewares/limiter');
 
 
 router.route('/signin')
-      .post(limiter,authController.signin)
-
+      .post(limiter, authController.signin)
 
 router.route('/logout')
       .post(authController.logout)
 
 router.route('/refresh')
-      .post(authController.refresh)
+      .get(authController.refresh)
       
 
 module.exports = router;

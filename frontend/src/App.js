@@ -1,9 +1,7 @@
-import logo from './logo.svg';
 import './App.css';
 import { HashRouter, Routes, Route} from "react-router-dom";
 
 import { Home, Signup, Signin, Profile} from "./pages";
-import ProtectedRoute from './utils/ProtectedRoute';
 
 function App() {
   return (
@@ -12,7 +10,7 @@ function App() {
         <Route path='/' element={<Home />} />
         <Route path='/signin' element={<Signin />} />
         <Route path='/signup' element={<Signup />} />
-        <Route path='/profile' element={<ProtectedRoute Component={Profile} />} />
+        <Route path='/profile' element={<Profile />} />
       </Routes>
     </HashRouter>
   );
