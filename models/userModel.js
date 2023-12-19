@@ -18,12 +18,13 @@ const userSchema = new Schema(
     },
     roles: [{
       type: String,
-      default: "developer"
+      default: "user"
     }],
     active: {
       type: Boolean, 
       default: true
     },
+    refreshToken : [String]
   }
 );
 

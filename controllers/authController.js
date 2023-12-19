@@ -7,96 +7,176 @@ const asyncHandler = require('express-async-handler')
 // @route POST /auth
 // @access Public
 const signin = asyncHandler(async (req, res) => {
-    const { email, password } = req.body
+    const cookies = req.cookies;
+    console.log(`cookie available at login: ${JSON.stringify(cookies)}`);
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ 'message': 'Email and password are required.' });
 
-    if (!email || !password) {
-        return res.status(400).json({ message: 'All fields are required' })
-    }
+    const foundUser = await User.findOne({ email }).exec();
+    if (!foundUser) return res.sendStatus(401); //Unauthorized 
+    // evaluate password 
+    const match = await bcrypt.compare(password, foundUser.password);
+    if (match) {
+        const roles = Object.values(foundUser.roles).filter(Boolean);
+        // create JWTs
+        const accessToken = jwt.sign(
+            {
+                "UserInfo": {
+                    "username": foundUser.username,
+                    "roles": roles
+                }
+            },
+            process.env.ACCESS_TOKEN_SECRET_KEY,
+            { expiresIn: '10s' }
+        );
+        const newRefreshToken = jwt.sign(
+            { "username": foundUser.username },
+            process.env.REFRESH_TOKEN_SECRET_KEY,
+            { expiresIn: '1d' }
+        );
 
-    const foundUser = await User.findOne({ email }).exec()
+        // Changed to let keyword
+        let newRefreshTokenArray =
+            !cookies?.jwt
+                ? foundUser.refreshToken
+                : foundUser.refreshToken.filter(rt => rt !== cookies.jwt);
 
-    if (!foundUser || !foundUser.active) {
-        return res.status(401).json({ message: 'Unauthorized' })
-    }
+        if (cookies?.jwt) {
 
-    const match = await bcrypt.compare(password, foundUser.password)
+            /* 
+            Scenario added here: 
+                1) User logs in but never uses RT and does not logout 
+                2) RT is stolen
+                3) If 1 & 2, reuse detection is needed to clear all RTs when user logs in
+            */
+            const refreshToken = cookies.jwt;
+            const foundToken = await User.findOne({ refreshToken }).exec();
 
-    if (!match) return res.status(401).json({ message: 'Unauthorized' })
-
-    const accessToken = jwt.sign(
-        {
-            "userInfo": {
-                "username": foundUser.username,
-                "id": foundUser._id,
-                "roles": foundUser.roles
+            // Detected refresh token reuse!
+            if (!foundToken) {
+                console.log('attempted refresh token reuse at login!')
+                // clear out ALL previous refresh tokens
+                newRefreshTokenArray = [];
             }
-        },
-        process.env.ACCESS_TOKEN_SECRET_KEY,
-        { expiresIn: '1min' }
-    )
 
-    const refreshToken = jwt.sign(
-        { "email": foundUser.email },
-        process.env.REFRESH_TOKEN_SECRET_KEY,
-        { expiresIn: '2min' }
-    )
+            res.clearCookie('jwt', { httpOnly: true, sameSite: 'None', secure: true });
+        }
 
-    // Create secure cookie with refresh token 
-    res.cookie('jwt', refreshToken, {
-        httpOnly: true, //accessible only by web server 
-        secure: true, //https
-        sameSite: 'None', //cross-site cookie 
-        maxAge: 7 * 24 * 60 * 60 * 1000 //cookie expiry: set to match rT
-    })
+        // Saving refreshToken with current user
+        foundUser.refreshToken = [...newRefreshTokenArray, newRefreshToken];
+        const result = await foundUser.save();
+        console.log(result);
+        console.log(roles);
 
-    // Send accessToken containing username and roles 
-    res.json({ accessToken })
+        // Creates Secure Cookie with refresh token
+        res.cookie('jwt', newRefreshToken, { httpOnly: true, secure: true, sameSite: 'None', maxAge: 24 * 60 * 60 * 1000 });
+
+        // Send authorization roles and access token to user
+        res.json({ roles, accessToken });
+
+    } else {
+        res.sendStatus(401);
+    }
 })
 
 // @desc Refresh
 // @route GET /auth/refresh
 // @access Public - because access token has expired
-const refresh = (req, res) => {
-    const cookies = req.cookies
-    if (!cookies?.jwt) return res.status(401).json({ message: 'Unauthorized' })
+const refresh = async (req, res) => {
+    const cookies = req.cookies;
+    if (!cookies?.jwt) return res.sendStatus(401);
+    const refreshToken = cookies.jwt;
+    res.clearCookie('jwt', { httpOnly: true, sameSite: 'None', secure: true });
 
-    const refreshToken = cookies.jwt
+    const foundUser = await User.findOne({ refreshToken }).exec();
 
+    // Detected refresh token reuse!
+    if (!foundUser) {
+        jwt.verify(
+            refreshToken,
+            process.env.REFRESH_TOKEN_SECRET_KEY,
+            async (err, decoded) => {
+                if (err) return res.sendStatus(403); //Forbidden
+                console.log('attempted refresh token reuse!')
+                const hackedUser = await User.findOne({ username: decoded.username }).exec();
+                hackedUser.refreshToken = [];
+                const result = await hackedUser.save();
+                console.log(result);
+            }
+        )
+        return res.sendStatus(403); //Forbidden
+    }
+
+    const newRefreshTokenArray = foundUser.refreshToken.filter(rt => rt !== refreshToken);
+
+    // evaluate jwt 
     jwt.verify(
         refreshToken,
         process.env.REFRESH_TOKEN_SECRET_KEY,
-        asyncHandler(async (err, decoded) => {
-            if (err) return res.status(403).json({ message: 'Forbidden' })
+        async (err, decoded) => {
+            if (err) {
+                console.log('expired refresh token')
+                foundUser.refreshToken = [...newRefreshTokenArray];
+                const result = await foundUser.save();
+                console.log(result);
+                return res.sendStatus(403);
+            }
+            if (err || foundUser.username !== decoded.username) return res.sendStatus(403);
 
-            const foundUser = await User.findOne({ email: decoded.email }).exec()
-
-            if (!foundUser) return res.status(401).json({ message: 'Unauthorized' })
-
+            // Refresh token was still valid
+            const roles = Object.values(foundUser.roles);
             const accessToken = jwt.sign(
                 {
-                    "userInfo": {
-                        "username": foundUser.username,
-                        "id": foundUser._id,
-                        "roles": foundUser.roles
+                    "UserInfo": {
+                        "username": decoded.username,
+                        "roles": roles
                     }
                 },
                 process.env.ACCESS_TOKEN_SECRET_KEY,
-                { expiresIn: '1min' }
-            )
+                { expiresIn: '10s' }
+            );
 
-            res.json({ accessToken })
-        })
-    )
+            const newRefreshToken = jwt.sign(
+                { "username": foundUser.username },
+                process.env.REFRESH_TOKEN_SECRET_KEY,
+                { expiresIn: '1d' }
+            );
+            // Saving refreshToken with current user
+            foundUser.refreshToken = [...newRefreshTokenArray, newRefreshToken];
+            const result = await foundUser.save();
+
+            // Creates Secure Cookie with refresh token
+            res.cookie('jwt', newRefreshToken, { httpOnly: true, secure: true, sameSite: 'None', maxAge: 24 * 60 * 60 * 1000 });
+
+            res.json({ roles, accessToken })
+        }
+    );
 }
 
 // @desc Logout
 // @route POST /auth/logout
 // @access Public - just to clear cookie if exists
-const logout = (req, res) => {
-    const cookies = req.cookies
-    if (!cookies?.jwt) return res.sendStatus(204) //No content
-    res.clearCookie('jwt', { httpOnly: true, sameSite: 'None', secure: true })
-    res.json({ message: 'Cookie cleared' })
+const logout = async (req, res) => {
+     // On client, also delete the accessToken
+
+     const cookies = req.cookies;
+     if (!cookies?.jwt) return res.sendStatus(204); //No content
+     const refreshToken = cookies.jwt;
+ 
+     // Is refreshToken in db?
+     const foundUser = await User.findOne({ refreshToken }).exec();
+     if (!foundUser) {
+         res.clearCookie('jwt', { httpOnly: true, sameSite: 'None', secure: true });
+         return res.sendStatus(204);
+     }
+ 
+     // Delete refreshToken in db
+     foundUser.refreshToken = foundUser.refreshToken.filter(rt => rt !== refreshToken);;
+     const result = await foundUser.save();
+     console.log(result);
+ 
+     res.clearCookie('jwt', { httpOnly: true, sameSite: 'None', secure: true });
+     res.sendStatus(204);
 }
 
 module.exports = {
