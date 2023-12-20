@@ -33,7 +33,7 @@ const createNewNote = asyncHandler(async (req, res) => {
     const { title, text } = req.body
     const user = new mongoose.Types.ObjectId(req.user);
     // Confirm data
-    if (!user || !title || !text) {
+    if (!user, !title || !text) {
         return res.status(400).json({ message: 'All fields are required' })
     }
     // Check for duplicate title
@@ -42,7 +42,10 @@ const createNewNote = asyncHandler(async (req, res) => {
         return res.status(409).json({ message: 'Duplicate note title' })
     }
     // Create and store the new user 
-    const note = await Note.create({user, title, text})
+    const noteObject = { user, title, text }
+    console.log("here")
+    const note = await Note.create(noteObject)
+    console.log("not here")
     if (note) { // Created 
         return res.status(201).json({ message: 'New note created' })
     } else {

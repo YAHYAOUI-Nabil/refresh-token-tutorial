@@ -1,37 +1,34 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-    AppBar,
     Link,
     TextField,
     Button,
     Typography,
-    Toolbar,
+    Box,
   } from '@mui/material';
-import { useNavigate, useLocation } from 'react-router-dom'
 import { useForm } from 'react-hook-form';
 
-import useAuth from '../hooks/useAuth';
 import useAxiosPrivate from '../hooks/useAxiosPrivate';
 import Header from '../components/Header';
+import Note from '../components/Note';
+import { useNavigate } from 'react-router-dom';
 const NOTES_URL = '/notes';
+const LOGOUT_URL = '/auth/logout';
 
 
 const Profile = () => {
-  const axiosPrivate = useAxiosPrivate()
-  const name = "Nabil Yahyaoui"
-  const { auth, setAuth } = useAuth();
-  const [errMsg, setErrMsg] = useState('');
-  const [notes, setNotes] = useState([]);
-  const userRef = useRef();
-  const errRef = useRef();
+  const axiosPrivate = useAxiosPrivate();
   const navigate = useNavigate();
-  const location = useLocation();
-  const from = location.state?.from?.pathname || "/";
-    const {
-        register,
-        handleSubmit,
-        formState: { errors },
-      } = useForm();
+  const username = localStorage.getItem('username');
+  const [errMsg, setErrMsg] = useState('');
+  const [sucMsg, setSucMsg] = useState('');
+  const [notes, setNotes] = useState([]);
+  const {
+          register,
+          handleSubmit,
+          resetField,
+          formState: { errors },
+        } = useForm();
 
     useEffect(() => {
       const fetchNote = async () => {
@@ -44,7 +41,7 @@ const Profile = () => {
       }
       }
       fetchNote()
-    }, [])
+    }, [sucMsg])
     
 
     const submit = async (data) => {
@@ -56,40 +53,71 @@ const Profile = () => {
                 withCredentials: true
             }
         );
-        console.log(JSON.stringify(response?.data));
-        //console.log(JSON.stringify(response));
-        const accessToken = response?.data?.accessToken;
-        const roles = response?.data?.roles;
-        setAuth({ roles, accessToken });
-        setErrMsg('');
-        navigate(from, { replace: true });
-    } catch (err) {
+        setSucMsg(response?.data.message);
+        resetField('title');
+        resetField('text');
+      } catch (err) {
         if (!err?.response) {
             setErrMsg('No Server Response');
-        } else if (err.response?.status === 400) {
-            setErrMsg('Missing Username or Password');
-        } else if (err.response?.status === 401) {
+        }  else if (err.response?.status === 401) {
             setErrMsg('Unauthorized');
-        } else {
-            setErrMsg('Login Failed');
-        }
-        // errRef.current.focus();
+        } 
+      }
     }
+
+    const logout = () => {
+      axiosPrivate.post(LOGOUT_URL,
+        {
+            headers: { 'Content-Type': 'application/json' },
+            withCredentials: true
+        }
+      );
+      localStorage.clear()
+      navigate('/')
     }
   return (
-    <div className="App">
+    <Box 
+      sx={{
+        display:"flex", 
+        flexDirection: "column", 
+        alignItems: "center"
+      }}
+    >
+
       <Header title="profile">
         <Typography>
-          welcome {name}
+          welcome {username}
         </Typography>
-        <Button variant="contained" color="error">
+        <Button 
+          variant="contained" 
+          color="error"
+          onClick={logout}
+        >
           logout
         </Button>
       </Header>
 
-      <div style={{marginTop: 50}}>
+      <Box 
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 3,
+          marginTop: 10,
+          marginBottom: 10,
+        }}
+      >
         <Typography variant='h6'>Create a new Note</Typography>
-        <form onSubmit={handleSubmit(submit)}>
+        <Box 
+          component="form" 
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 1,
+          }}
+          onSubmit={handleSubmit(submit)}
+        >
           <TextField
             style={{ width: "300px", margin: "5px" }}
             type="text"
@@ -98,7 +126,6 @@ const Profile = () => {
             variant="outlined"
             {...register('title', { required: true })}
           />
-          <br />
           <TextField
             style={{ width: "300px", margin: "5px" }}
             type="text"
@@ -107,39 +134,53 @@ const Profile = () => {
             variant="outlined"
             {...register('text', { required: true })}
           />
-          <br />
           {errMsg && <Typography color="red">{errMsg}</Typography>}
+          {sucMsg && <Typography color="green">{sucMsg}</Typography>}
           <Button type='submit' variant="contained" color="primary">
             save
           </Button>
-        </form>
-      </div>
-      <div style={{marginTop: 50}}>
-        <Typography variant='h6'>My Notes</Typography>
-        {
-          notes?.length
-          ? (
-            notes?.map((note) => (
-              <div key={note._id} style={{display: 'flex'}}>
-                <div>
-                  <Typography variant='h5'>{note.title}</Typography>
-                  <Typography>{note.text}</Typography>
-                </div>
-                <div style={{display: 'flex'}}>
-                  <Button color='primary' variant='contained'>Edit</Button>
-                  <Button color='warning' variant='contained'>Delete</Button>
-                </div>
-              </div>
-            ))
-          ) : (
-            <Typography>No notes to show</Typography>
-          )
-        }
-        
-      </div>
-        
-      <Typography>Go back <Link href="/">home</Link></Typography>
-    </div>
+        </Box>
+      </Box>
+
+      <Box 
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 3,
+          marginBottom: 10,
+        }}
+      >
+        <Typography variant='h5'>My Notes</Typography>
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 2,
+            padding:5,
+            boxShadow: 10,
+            borderRadius: 2
+          }}
+        >
+          {
+            notes?.length
+            ? (
+              notes?.map((note) => (
+                <Note key={note._id} title={note.title} text={note.text} />
+              ))
+            ) : (
+              <Typography>No notes to show</Typography>
+            )
+          }
+        </Box>
+      </Box> 
+      <Typography 
+        sx={{
+          marginBottom: 10
+        }}
+      >Go back <Link href="/">home</Link></Typography>
+    </Box>
   )
 }
 

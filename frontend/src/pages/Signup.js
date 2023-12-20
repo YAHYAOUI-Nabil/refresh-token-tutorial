@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
-    AppBar,
     TextField,
     Button,
     Link,
     Typography,
-    Toolbar,
   } from '@mui/material';
 import axios from '../api/axios';
 import useAuth from '../hooks/useAuth';
@@ -31,8 +29,7 @@ const Signup = () => {
       const formData = {
         username: data.firstname + ' ' + data.lastname,
         email: data.email,
-        password: data.password,
-        roles: data.roles.split(',')
+        password: data.password
       }
       try {
         const response = await axios.post(SIGNUP_URL,
@@ -48,7 +45,7 @@ const Signup = () => {
         const roles = response?.data?.roles;
         setAuth({ roles, accessToken });
         setErrMsg('');
-        navigate(from, { replace: true });
+        navigate('/signin');
     } catch (err) {
         if (!err?.response) {
             setErrMsg('No Server Response');
@@ -101,15 +98,6 @@ const Signup = () => {
           label="Password"
           variant="outlined"
           {...register('password', { required: true })}
-        />
-        <br />
-        <TextField
-          style={{ width: "300px", margin: "5px" }}
-          type="text"
-          id="roles"
-          label="Roles"
-          variant="outlined"
-          {...register('roles', { required: true })}
         />
         <br />
         {errMsg && <Typography color="red">{errMsg}</Typography>}

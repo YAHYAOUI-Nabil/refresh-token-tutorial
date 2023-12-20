@@ -16,10 +16,10 @@ const userSchema = new Schema(
       type: String,  
       required:true
     },
-    roles: [{
-      type: String,
-      default: "user"
-    }],
+    roles: {
+      type: [String],
+      default: ["user"]
+    },
     active: {
       type: Boolean, 
       default: true

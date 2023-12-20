@@ -21,16 +21,20 @@ const signin = asyncHandler(async (req, res) => {
         // create JWTs
         const accessToken = jwt.sign(
             {
-                "UserInfo": {
+                "userInfo": {
                     "username": foundUser.username,
+                    "id": foundUser._id,
                     "roles": roles
                 }
             },
             process.env.ACCESS_TOKEN_SECRET_KEY,
-            { expiresIn: '10s' }
+            { expiresIn: '10min' }
         );
         const newRefreshToken = jwt.sign(
-            { "username": foundUser.username },
+            { 
+                "username": foundUser.username,
+                "id": foundUser._id
+             },
             process.env.REFRESH_TOKEN_SECRET_KEY,
             { expiresIn: '1d' }
         );
@@ -72,7 +76,7 @@ const signin = asyncHandler(async (req, res) => {
         res.cookie('jwt', newRefreshToken, { httpOnly: true, secure: true, sameSite: 'None', maxAge: 24 * 60 * 60 * 1000 });
 
         // Send authorization roles and access token to user
-        res.json({ roles, accessToken });
+        res.json({ roles, accessToken, username: foundUser.username });
 
     } else {
         res.sendStatus(401);
@@ -127,17 +131,21 @@ const refresh = async (req, res) => {
             const roles = Object.values(foundUser.roles);
             const accessToken = jwt.sign(
                 {
-                    "UserInfo": {
+                    "userInfo": {
                         "username": decoded.username,
+                        "id": decoded.id,
                         "roles": roles
                     }
                 },
                 process.env.ACCESS_TOKEN_SECRET_KEY,
-                { expiresIn: '10s' }
+                { expiresIn: '10min' }
             );
 
             const newRefreshToken = jwt.sign(
-                { "username": foundUser.username },
+                { 
+                    "username": foundUser.username,
+                    "id": foundUser._id
+                 },
                 process.env.REFRESH_TOKEN_SECRET_KEY,
                 { expiresIn: '1d' }
             );

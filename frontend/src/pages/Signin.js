@@ -40,6 +40,7 @@ const Signin = () => {
         console.log(JSON.stringify(response?.data));
         //console.log(JSON.stringify(response));
         const accessToken = response?.data?.accessToken;
+        localStorage.setItem('username', response?.data?.username) 
         const roles = response?.data?.roles;
         setAuth({ roles, accessToken, isAuth: true });
         setErrMsg('');
